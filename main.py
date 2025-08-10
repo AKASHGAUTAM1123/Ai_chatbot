@@ -115,7 +115,7 @@ with st.sidebar:
         
         model_name = st.selectbox(
             "🤖 Analysis Model",
-            ( "google/palm-2-chat-bison"),
+            ("google/palm-2-chat-bison",),
             index=0
         )
         
@@ -191,6 +191,25 @@ if prompt := st.chat_input("How are you feeling today?"):
             time.sleep(0.5)
         
         try:
+            # Add a dynamic session ID and timestamp to avoid cached identical responses
+            dynamic_prompt = f"""
+            You are a compassionate mental health ally. GUIDELINES:
+            1. Respond with empathetic, non-judgmental support
+            2. Structure reflections:
+               - Emotional Validation
+               - Pattern Recognition
+               - Gentle Probing Questions
+               - Coping Strategies
+            3. Use nature-inspired emojis: 🌱🌸🌧️🌈
+            4. Current Mood: {current_mood}
+            5. Analysis Depth: {analysis_depth}
+            6. Never make diagnoses
+            7. Maintain therapeutic boundaries
+
+            Session Time: {time.strftime('%Y-%m-%d %H:%M:%S')}
+            Session ID: {time.time_ns()}
+            """
+
             response = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={
@@ -201,22 +220,10 @@ if prompt := st.chat_input("How are you feeling today?"):
                 },
                 json={
                     "model": model_name,
-                    "messages": [{
-                        "role": "system",
-                        "content": f"""You are a compassionate mental health ally. GUIDELINES:
-1. Respond with empathetic, non-judgmental support
-2. Structure reflections:
-   - Emotional Validation
-   - Pattern Recognition
-   - Gentle Probing Questions
-   - Coping Strategies
-3. Use nature-inspired emojis: 🌱🌸🌧️🌈
-4. Current Mood: {current_mood}
-5. Analysis Depth: {analysis_depth}
-6. Never make diagnoses
-7. Maintain therapeutic boundaries"""
-                    }] + st.session_state.messages[-4:],
-                    "temperature": 0.3,
+                    "messages": [
+                        {"role": "system", "content": dynamic_prompt}
+                    ] + st.session_state.messages,  # Full history for better context
+                    "temperature": 0.8,  # More variation
                     "response_format": {"type": "text"}
                 },
                 timeout=20
@@ -229,7 +236,7 @@ if prompt := st.chat_input("How are you feeling today?"):
             # Format response
             processed_response = raw_response.replace("**", "").replace("```", "")
             
-            # Stream response
+            # Stream response word by word
             lines = processed_response.split('\n')
             for line in lines:
                 words = line.split()
@@ -241,8 +248,11 @@ if prompt := st.chat_input("How are you feeling today?"):
                 response_placeholder.markdown(full_response + "▌")
             
             # Final formatting
-            full_response = full_response.replace("Reflection:", "<span style='color: var(--primary)'>Reflection:</span>") \
-                                       .replace("Coping Strategy:", "<span style='color: #7A918D'>Coping Strategy:</span>")
+            full_response = full_response.replace(
+                "Reflection:", "<span style='color: var(--primary)'>Reflection:</span>"
+            ).replace(
+                "Coping Strategy:", "<span style='color: #7A918D'>Coping Strategy:</span>"
+            )
             
             response_placeholder.markdown(full_response, unsafe_allow_html=True)
             
@@ -251,3 +261,4 @@ if prompt := st.chat_input("How are you feeling today?"):
             response_placeholder.error("🍃 Gentle Reminder: It's okay to take a breath and try again")
 
     st.session_state.messages.append({"role": "assistant", "content": full_response})
+
